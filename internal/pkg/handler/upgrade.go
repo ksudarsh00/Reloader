@@ -94,6 +94,20 @@ func GetArgoRolloutRollingUpgradeFuncs() callbacks.RollingUpgradeFuncs {
 	}
 }
 
+// GetCronJobRollingUpgradeFuncs returns all callback funcs for a CronJob
+func GetCronJobRollingUpgradeFuncs() callbacks.RollingUpgradeFuncs {
+	return callbacks.RollingUpgradeFuncs{
+		ItemsFunc:          callbacks.GetCronJobItems,
+		AnnotationsFunc:    callbacks.GetCronJobAnnotations,
+		PodAnnotationsFunc: callbacks.GetCronJobPodAnnotations,
+		ContainersFunc:     callbacks.GetCronJobContainers,
+		InitContainersFunc: callbacks.GetCronJobInitContainers,
+		UpdateFunc:         callbacks.UpdateCronJob,
+		VolumesFunc:        callbacks.GetCronJobVolumes,
+		ResourceType:       "CronJob",
+	}
+}
+
 func doRollingUpgrade(config util.Config, collectors metrics.Collectors, recorder record.EventRecorder) error {
 	clients := kube.GetClients()
 
@@ -106,6 +120,10 @@ func doRollingUpgrade(config util.Config, collectors metrics.Collectors, recorde
 		return err
 	}
 	err = rollingUpgrade(clients, config, GetStatefulSetRollingUpgradeFuncs(), collectors, recorder)
+	if err != nil {
+		return err
+	}
+	err = rollingUpgrade(clients, config, GetCronJobRollingUpgradeFuncs(), collectors, recorder)
 	if err != nil {
 		return err
 	}

@@ -6,8 +6,9 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/stakater/Reloader/pkg/kube"
 	appsv1 "k8s.io/api/apps/v1"
+	batchv1 "k8s.io/api/batch/v1"
 	v1 "k8s.io/api/core/v1"
-	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 
 	argorolloutv1alpha1 "github.com/argoproj/argo-rollouts/pkg/apis/rollouts/v1alpha1"
@@ -49,7 +50,7 @@ type RollingUpgradeFuncs struct {
 
 // GetDeploymentItems returns the deployments in given namespace
 func GetDeploymentItems(clients kube.Clients, namespace string) []runtime.Object {
-	deployments, err := clients.KubernetesClient.AppsV1().Deployments(namespace).List(context.TODO(), meta_v1.ListOptions{})
+	deployments, err := clients.KubernetesClient.AppsV1().Deployments(namespace).List(context.TODO(), metav1.ListOptions{})
 	if err != nil {
 		logrus.Errorf("Failed to list deployments %v", err)
 	}
@@ -69,7 +70,7 @@ func GetDeploymentItems(clients kube.Clients, namespace string) []runtime.Object
 
 // GetDaemonSetItems returns the daemonSets in given namespace
 func GetDaemonSetItems(clients kube.Clients, namespace string) []runtime.Object {
-	daemonSets, err := clients.KubernetesClient.AppsV1().DaemonSets(namespace).List(context.TODO(), meta_v1.ListOptions{})
+	daemonSets, err := clients.KubernetesClient.AppsV1().DaemonSets(namespace).List(context.TODO(), metav1.ListOptions{})
 	if err != nil {
 		logrus.Errorf("Failed to list daemonSets %v", err)
 	}
@@ -88,7 +89,7 @@ func GetDaemonSetItems(clients kube.Clients, namespace string) []runtime.Object 
 
 // GetStatefulSetItems returns the statefulSets in given namespace
 func GetStatefulSetItems(clients kube.Clients, namespace string) []runtime.Object {
-	statefulSets, err := clients.KubernetesClient.AppsV1().StatefulSets(namespace).List(context.TODO(), meta_v1.ListOptions{})
+	statefulSets, err := clients.KubernetesClient.AppsV1().StatefulSets(namespace).List(context.TODO(), metav1.ListOptions{})
 	if err != nil {
 		logrus.Errorf("Failed to list statefulSets %v", err)
 	}
@@ -107,7 +108,7 @@ func GetStatefulSetItems(clients kube.Clients, namespace string) []runtime.Objec
 
 // GetDeploymentConfigItems returns the deploymentConfigs in given namespace
 func GetDeploymentConfigItems(clients kube.Clients, namespace string) []runtime.Object {
-	deploymentConfigs, err := clients.OpenshiftAppsClient.AppsV1().DeploymentConfigs(namespace).List(context.TODO(), meta_v1.ListOptions{})
+	deploymentConfigs, err := clients.OpenshiftAppsClient.AppsV1().DeploymentConfigs(namespace).List(context.TODO(), metav1.ListOptions{})
 	if err != nil {
 		logrus.Errorf("Failed to list deploymentConfigs %v", err)
 	}
@@ -126,7 +127,7 @@ func GetDeploymentConfigItems(clients kube.Clients, namespace string) []runtime.
 
 // GetRolloutItems returns the rollouts in given namespace
 func GetRolloutItems(clients kube.Clients, namespace string) []runtime.Object {
-	rollouts, err := clients.ArgoRolloutClient.ArgoprojV1alpha1().Rollouts(namespace).List(context.TODO(), meta_v1.ListOptions{})
+	rollouts, err := clients.ArgoRolloutClient.ArgoprojV1alpha1().Rollouts(namespace).List(context.TODO(), metav1.ListOptions{})
 	if err != nil {
 		logrus.Errorf("Failed to list Rollouts %v", err)
 	}
@@ -138,6 +139,25 @@ func GetRolloutItems(clients kube.Clients, namespace string) []runtime.Object {
 			rollouts.Items[i].Spec.Template.ObjectMeta.Annotations = make(map[string]string)
 		}
 		items[i] = &rollouts.Items[i]
+	}
+
+	return items
+}
+
+// GetCronJobItems returns the CronJobs in the given namespace
+func GetCronJobItems(clients kube.Clients, namespace string) []runtime.Object {
+	configMaps, err := clients.KubernetesClient.BatchV1().CronJobs(namespace).List(context.TODO(), metav1.ListOptions{})
+	if err != nil {
+		logrus.Errorf("Failed to list ConfinMaps %v", err)
+	}
+
+	items := make([]runtime.Object, len(configMaps.Items))
+	// Ensure we always have pod annotations to add to
+	for i, v := range configMaps.Items {
+		if v.Spec.JobTemplate.Annotations == nil {
+			configMaps.Items[i].Spec.JobTemplate.ObjectMeta.Annotations = make(map[string]string)
+		}
+		items[i] = &configMaps.Items[i]
 	}
 
 	return items
@@ -168,6 +188,11 @@ func GetRolloutAnnotations(item runtime.Object) map[string]string {
 	return item.(*argorolloutv1alpha1.Rollout).ObjectMeta.Annotations
 }
 
+// GetCronJobAnnotations returns the annotations of given CronJob
+func GetCronJobAnnotations(item runtime.Object) map[string]string {
+	return item.(*batchv1.CronJob).ObjectMeta.Annotations
+}
+
 // GetDeploymentPodAnnotations returns the pod's annotations of given deployment
 func GetDeploymentPodAnnotations(item runtime.Object) map[string]string {
 	return item.(*appsv1.Deployment).Spec.Template.ObjectMeta.Annotations
@@ -191,6 +216,11 @@ func GetDeploymentConfigPodAnnotations(item runtime.Object) map[string]string {
 // GetRolloutPodAnnotations returns the pod's annotations of given rollout
 func GetRolloutPodAnnotations(item runtime.Object) map[string]string {
 	return item.(*argorolloutv1alpha1.Rollout).Spec.Template.ObjectMeta.Annotations
+}
+
+// GetCronJobPodAnnotations returns the pod's annotations of given CronJob
+func GetCronJobPodAnnotations(item runtime.Object) map[string]string {
+	return item.(*batchv1.CronJob).Spec.JobTemplate.Spec.Template.ObjectMeta.Annotations
 }
 
 // GetDeploymentContainers returns the containers of given deployment
@@ -218,6 +248,11 @@ func GetRolloutContainers(item runtime.Object) []v1.Container {
 	return item.(*argorolloutv1alpha1.Rollout).Spec.Template.Spec.Containers
 }
 
+// GetCronJobContainers returns the containers of given CronJob
+func GetCronJobContainers(item runtime.Object) []v1.Container {
+	return item.(*batchv1.CronJob).Spec.JobTemplate.Spec.Template.Spec.Containers
+}
+
 // GetDeploymentInitContainers returns the containers of given deployment
 func GetDeploymentInitContainers(item runtime.Object) []v1.Container {
 	return item.(*appsv1.Deployment).Spec.Template.Spec.InitContainers
@@ -243,41 +278,57 @@ func GetRolloutInitContainers(item runtime.Object) []v1.Container {
 	return item.(*argorolloutv1alpha1.Rollout).Spec.Template.Spec.InitContainers
 }
 
+// GetCronJobInitContainers returns the init containers of given CronJob
+func GetCronJobInitContainers(item runtime.Object) []v1.Container {
+	return item.(*batchv1.CronJob).Spec.JobTemplate.Spec.Template.Spec.InitContainers
+}
+
 // UpdateDeployment performs rolling upgrade on deployment
 func UpdateDeployment(clients kube.Clients, namespace string, resource runtime.Object) error {
 	deployment := resource.(*appsv1.Deployment)
-	_, err := clients.KubernetesClient.AppsV1().Deployments(namespace).Update(context.TODO(), deployment, meta_v1.UpdateOptions{FieldManager: "Reloader"})
+	_, err := clients.KubernetesClient.AppsV1().Deployments(namespace).Update(context.TODO(), deployment, metav1.UpdateOptions{FieldManager: "Reloader"})
 	return err
 }
 
 // UpdateDaemonSet performs rolling upgrade on daemonSet
 func UpdateDaemonSet(clients kube.Clients, namespace string, resource runtime.Object) error {
 	daemonSet := resource.(*appsv1.DaemonSet)
-	_, err := clients.KubernetesClient.AppsV1().DaemonSets(namespace).Update(context.TODO(), daemonSet, meta_v1.UpdateOptions{FieldManager: "Reloader"})
+	_, err := clients.KubernetesClient.AppsV1().DaemonSets(namespace).Update(context.TODO(), daemonSet, metav1.UpdateOptions{FieldManager: "Reloader"})
 	return err
 }
 
 // UpdateStatefulSet performs rolling upgrade on statefulSet
 func UpdateStatefulSet(clients kube.Clients, namespace string, resource runtime.Object) error {
 	statefulSet := resource.(*appsv1.StatefulSet)
-	_, err := clients.KubernetesClient.AppsV1().StatefulSets(namespace).Update(context.TODO(), statefulSet, meta_v1.UpdateOptions{FieldManager: "Reloader"})
+	_, err := clients.KubernetesClient.AppsV1().StatefulSets(namespace).Update(context.TODO(), statefulSet, metav1.UpdateOptions{FieldManager: "Reloader"})
 	return err
 }
 
 // UpdateDeploymentConfig performs rolling upgrade on deploymentConfig
 func UpdateDeploymentConfig(clients kube.Clients, namespace string, resource runtime.Object) error {
 	deploymentConfig := resource.(*openshiftv1.DeploymentConfig)
-	_, err := clients.OpenshiftAppsClient.AppsV1().DeploymentConfigs(namespace).Update(context.TODO(), deploymentConfig, meta_v1.UpdateOptions{FieldManager: "Reloader"})
+	_, err := clients.OpenshiftAppsClient.AppsV1().DeploymentConfigs(namespace).Update(context.TODO(), deploymentConfig, metav1.UpdateOptions{FieldManager: "Reloader"})
 	return err
 }
 
 // UpdateRollout performs rolling upgrade on rollout
 func UpdateRollout(clients kube.Clients, namespace string, resource runtime.Object) error {
 	rollout := resource.(*argorolloutv1alpha1.Rollout)
-	rolloutBefore, _ := clients.ArgoRolloutClient.ArgoprojV1alpha1().Rollouts(namespace).Get(context.TODO(), rollout.Name, meta_v1.GetOptions{})
+	rolloutBefore, _ := clients.ArgoRolloutClient.ArgoprojV1alpha1().Rollouts(namespace).Get(context.TODO(), rollout.Name, metav1.GetOptions{})
 	logrus.Warnf("Before: %+v", rolloutBefore.Spec.Template.Spec.Containers[0].Env)
 	logrus.Warnf("After: %+v", rollout.Spec.Template.Spec.Containers[0].Env)
-	_, err := clients.ArgoRolloutClient.ArgoprojV1alpha1().Rollouts(namespace).Update(context.TODO(), rollout, meta_v1.UpdateOptions{FieldManager: "Reloader"})
+	_, err := clients.ArgoRolloutClient.ArgoprojV1alpha1().Rollouts(namespace).Update(context.TODO(), rollout, metav1.UpdateOptions{FieldManager: "Reloader"})
+	return err
+}
+
+// UpdateCronJob performs triggering a Job from the JobTemplate of existing CronJob
+func UpdateCronJob(clients kube.Clients, namespace string, resource runtime.Object) error {
+	job := &batchv1.Job{
+		ObjectMeta: resource.(*batchv1.CronJob).Spec.JobTemplate.ObjectMeta,
+		Spec:       resource.(*batchv1.CronJob).Spec.JobTemplate.Spec,
+	}
+	job.GenerateName = resource.(*batchv1.CronJob).Name + "-"
+	_, err := clients.KubernetesClient.BatchV1().Jobs(namespace).Create(context.TODO(), job, metav1.CreateOptions{FieldManager: "Reloader"})
 	return err
 }
 
@@ -304,4 +355,9 @@ func GetDeploymentConfigVolumes(item runtime.Object) []v1.Volume {
 // GetRolloutVolumes returns the Volumes of given rollout
 func GetRolloutVolumes(item runtime.Object) []v1.Volume {
 	return item.(*argorolloutv1alpha1.Rollout).Spec.Template.Spec.Volumes
+}
+
+// GetCronJobVolumes returns the volumes of given CronJob
+func GetCronJobVolumes(item runtime.Object) []v1.Volume {
+	return item.(*batchv1.CronJob).Spec.JobTemplate.Spec.Template.Spec.Volumes
 }
